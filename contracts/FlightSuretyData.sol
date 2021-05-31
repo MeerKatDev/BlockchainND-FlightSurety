@@ -11,11 +11,11 @@ contract FlightSuretyData {
 
     address private contractOwner;                                      // Account used to deploy contract
     bool private operational = true;                                    // Blocks all state changes throughout the contract if false
+    mapping(address => bool) registeredAirlines;
 
     /********************************************************************************************/
     /*                                       EVENT DEFINITIONS                                  */
     /********************************************************************************************/
-
 
     /**
     * @dev Constructor
@@ -88,8 +88,17 @@ contract FlightSuretyData {
     *      Can only be called from FlightSuretyApp contract
     *
     */   
-    function registerAirline() external pure
+    function registerAirline(address airline, bool _operational) external
+    requireIsOperational
     {
+        registeredAirlines[airline] = _operational;
+    }
+
+    /** TOIMPLEMENT
+     */
+    function authorizeCaller(address someone) external pure
+    {
+
     }
 
 
@@ -108,6 +117,15 @@ contract FlightSuretyData {
     function creditInsurees() external pure
     {
 
+    }
+
+    function isAirline(address airline) external returns(bool)
+    {
+        // need to check if it is a boolean
+        if(registeredAirlines[airline] == true)
+            return true;
+        else
+            return false;
     }
     
 

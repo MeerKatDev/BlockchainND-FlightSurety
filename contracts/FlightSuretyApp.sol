@@ -16,6 +16,7 @@ contract FlightSuretyApp {
     /*                                       DATA VARIABLES                                     */
     /********************************************************************************************/
 
+    FlightSuretyData flightSuretyData;
     // Flight status codees
     uint8 private constant STATUS_CODE_UNKNOWN = 0;
     uint8 private constant STATUS_CODE_ON_TIME = 10;
@@ -26,6 +27,7 @@ contract FlightSuretyApp {
 
     address private contractOwner;          // Account used to deploy contract
     bool private operational = true;
+    uint8 private constant CONSENSUS_REQUIRED_FOR_NEW_AIRLINE = 4;
 
     struct Flight {
         bool isRegistered;
@@ -33,6 +35,7 @@ contract FlightSuretyApp {
         uint256 updatedTimestamp;        
         address airline;
     }
+
     mapping(bytes32 => Flight) private flights;
 
  
@@ -68,13 +71,22 @@ contract FlightSuretyApp {
     /*                                       CONSTRUCTOR                                        */
     /********************************************************************************************/
 
+    event AirlineRegistered(address airline);
+
     /**
     * @dev Contract constructor
     *
     */
-    constructor() public
+    constructor(address dataAddress) public
     {
         contractOwner = msg.sender;
+
+        operational = true; // ?
+
+        flightSuretyData = FlightSuretyData(dataAddress);
+        flightSuretyData.registerAirline(contractOwner, true);
+
+        emit AirlineRegistered(contractOwner);
     }
 
     /********************************************************************************************/
@@ -285,3 +297,8 @@ contract FlightSuretyApp {
 // endregion
 
 }   
+
+// decoupling through interface
+interface FlightSuretyData {
+    function registerAirline(address airline, bool operational) external;
+}

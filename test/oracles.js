@@ -6,6 +6,7 @@ contract('Oracles', async (accounts) => {
 
   const TEST_ORACLES_COUNT = 20;
   var config;
+
   before('setup contract', async () => {
     config = await Test.Config(accounts);
 
