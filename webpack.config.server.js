@@ -1,9 +1,10 @@
 const webpack = require('webpack')
 const path = require('path')
 const nodeExternals = require('webpack-node-externals')
-const StartServerPlugin = require('start-server-webpack-plugin')
+const StartServerPlugin = require('start-server-nestjs-webpack-plugin')
 
 module.exports = {
+    mode: 'development',
     entry: [
         'webpack/hot/poll?1000',
         './src/server/index'
@@ -11,7 +12,7 @@ module.exports = {
     watch: true,
     target: 'node',
     externals: [nodeExternals({
-        whitelist: ['webpack/hot/poll?1000']
+        allowlist: ['webpack/hot/poll?1000']
     })],
     module: {
         rules: [{
@@ -22,7 +23,6 @@ module.exports = {
     },
     plugins: [
         new StartServerPlugin('server.js'),
-        new webpack.NamedModulesPlugin(),
         new webpack.HotModuleReplacementPlugin(),
         new webpack.NoEmitOnErrorsPlugin(),
         new webpack.DefinePlugin({

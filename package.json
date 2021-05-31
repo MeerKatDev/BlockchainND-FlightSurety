@@ -32,7 +32,7 @@
     "html-loader": "0.5.5",
     "html-webpack-plugin": "^5.3.1",
     "openzeppelin-solidity": "^2.3",
-    "start-server-webpack-plugin": "2.2.5",
+    "start-server-nestjs-webpack-plugin": "2.2.5",
     "style-loader": "^0.23.1",
     "superstatic": "6.0.3",
     "truffle": "5.3.8",
