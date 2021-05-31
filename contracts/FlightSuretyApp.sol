@@ -1,4 +1,4 @@
-pragma solidity ^0.4.25;
+pragma solidity ^0.5.0;
 
 // It's important to avoid vulnerabilities due to numeric overflow bugs
 // OpenZeppelin's SafeMath library, when used correctly, protects agains such bugs
@@ -81,7 +81,7 @@ contract FlightSuretyApp {
     /*                                       UTILITY FUNCTIONS                                  */
     /********************************************************************************************/
 
-    function isOperational() public pure returns(bool)
+    function isOperational() public view returns(bool)
     {
         return operational;  // Modify to call data contract's status
     }
@@ -95,8 +95,9 @@ contract FlightSuretyApp {
     * @dev Add an airline to the registration queue
     *
     */   
-    function registerAirline() external pure returns(bool success, uint256 votes)
+    function registerAirline() external view
     requireIsOperational
+    returns(bool success, uint256 votes)
     {
         return (success, 0);
     }
@@ -124,13 +125,7 @@ contract FlightSuretyApp {
 
 
     // Generate a request for oracles to fetch flight information
-    function fetchFlightStatus
-                        (
-                            address airline,
-                            string flight,
-                            uint256 timestamp                            
-                        )
-                        external
+    function fetchFlightStatus(address airline, string calldata flight, uint256 timestamp) external
     {
         uint8 index = getRandomIndex(msg.sender);
 
@@ -188,13 +183,16 @@ contract FlightSuretyApp {
     // they fetch data and submit a response
     event OracleRequest(uint8 index, address airline, string flight, uint256 timestamp);
 
+    modifier requireRegistrationFee()
+    {
+        require(msg.value >= REGISTRATION_FEE, "Registration fee is required");
+        _;
+    }
 
     // Register an oracle with the contract
     function registerOracle() external payable
+    requireRegistrationFee
     {
-        // Require registration fee
-        require(msg.value >= REGISTRATION_FEE, "Registration fee is required");
-
         uint8[3] memory indexes = generateIndexes(msg.sender);
 
         oracles[msg.sender] = Oracle({
@@ -203,7 +201,7 @@ contract FlightSuretyApp {
                                     });
     }
 
-    function getMyIndexes() view external returns(uint8[3])
+    function getMyIndexes() view external returns(uint8[3] memory)
     {
         require(oracles[msg.sender].isRegistered, "Not registered as an oracle");
 
@@ -218,7 +216,7 @@ contract FlightSuretyApp {
                         (
                             uint8 index,
                             address airline,
-                            string flight,
+                            string calldata flight,
                             uint256 timestamp,
                             uint8 statusCode
                         )
@@ -244,14 +242,14 @@ contract FlightSuretyApp {
         }
     }
 
-
-    function getFlightKey(address airline, string flight, uint256 timestamp) pure internal returns(bytes32)
+    // Luca: added "memory" bc of warnings
+    function getFlightKey(address airline, string memory flight, uint256 timestamp) pure internal returns(bytes32)
     {
         return keccak256(abi.encodePacked(airline, flight, timestamp));
     }
 
     // Returns array of three non-duplicating integers from 0-9
-    function generateIndexes(address account) internal returns(uint8[3])
+    function generateIndexes(address account) internal returns(uint8[3] memory)
     {
         uint8[3] memory indexes;
         indexes[0] = getRandomIndex(account);
