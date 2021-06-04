@@ -187,10 +187,18 @@ contract FlightSuretyData {
     }
 
     function isAirlineEnqueued(address airline) external view
-    requireIsOperational()
+    requireIsOperational
     returns (bool)
     {
         return registrationQueue[airline].enqueued;
+    }
+
+    // operational = registered + funded
+    function isAirlineOperational(address airline) external view
+    requireIsOperational
+    returns (bool)
+    {
+        return (airlinesFunding[airline] > 0) && (registeredAirlines[airline] == true);
     }
 
     function registeredAirlinesSize() external view returns(uint256)

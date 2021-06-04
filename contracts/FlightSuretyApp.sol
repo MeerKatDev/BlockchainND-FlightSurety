@@ -18,7 +18,8 @@ contract FlightSuretyApp {
 
     FlightSuretyData flightSuretyData;
     uint256 public constant AIRLINE_REGISTRATION_FEE = 10 ether;
-    uint256 constant MAXIMUM_INSURANCE_FEE = 1 ether;
+    uint256 public constant MAXIMUM_INSURANCE_FEE = 1 ether;
+    uint256 public constant MINIMUM_ADDITIONAL_FUNDING = 1 ether;
 
 
     address private contractOwner;          // Account used to deploy contract
@@ -56,6 +57,12 @@ contract FlightSuretyApp {
     modifier requireCorrectFundingFee()
     {
         require(msg.value >= AIRLINE_REGISTRATION_FEE, "The fee submitted is too low. The required fee is of 10 ether");
+        _;
+    }
+
+    modifier requireAmountNonZero()
+    {
+        require(msg.value > MINIMUM_ADDITIONAL_FUNDING, "You need to add at least 1 eth");
         _;
     }
 
@@ -161,6 +168,15 @@ contract FlightSuretyApp {
         emit AirlineFunded(airline);
     }
 
+    function addFunding(address airline) public payable
+    requireAmountNonZero
+    {
+        require(flightSuretyData.isAirlineOperational(airline), "You need to first submit initial funding via submitFunding()");
+
+        flightSuretyData.fundAirline(airline, msg.value);
+        emit AirlineFunded(airline);
+    }
+
    /**
     * @dev Register a future flight for insuring.
     *
@@ -168,9 +184,6 @@ contract FlightSuretyApp {
     function registerFlight(string calldata flight, uint256 timestamp) external
     {
         flightSuretyData.registerFlight(msg.sender, flight, timestamp);
-
-        // emit FlightRegistered(msg.sender, flight, timestamp);
-
     }
 
     
@@ -277,10 +290,7 @@ contract FlightSuretyApp {
     {
         uint8[3] memory indexes = generateIndexes(msg.sender);
 
-        oracles[msg.sender] = Oracle({
-                                        isRegistered: true,
-                                        indexes: indexes
-                                    });
+        oracles[msg.sender] = Oracle({ isRegistered: true, indexes: indexes });
     }
 
     function getMyIndexes() view external returns(uint8[3] memory)
@@ -382,4 +392,5 @@ interface FlightSuretyData {
     function registerFlight(address airline, string calldata flight, uint256 timestamp) external;
     function getCustomerCredit(address customer) external view returns(uint256);
     function pay(address customer) external returns(uint256);
+    function isAirlineOperational(address airline) external view returns(bool);
 }
