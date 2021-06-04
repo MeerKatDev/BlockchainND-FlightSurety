@@ -17,27 +17,13 @@ contract FlightSuretyApp {
     /********************************************************************************************/
 
     FlightSuretyData flightSuretyData;
-    // Flight status codees
-    uint8 private constant STATUS_CODE_UNKNOWN = 0;
-    uint8 private constant STATUS_CODE_ON_TIME = 10;
-    uint8 private constant STATUS_CODE_LATE_AIRLINE = 20;
-    uint8 private constant STATUS_CODE_LATE_WEATHER = 30;
-    uint8 private constant STATUS_CODE_LATE_TECHNICAL = 40;
-    uint8 private constant STATUS_CODE_LATE_OTHER = 50;
+    uint256 public constant AIRLINE_REGISTRATION_FEE = 10 ether;
+    uint256 constant MAXIMUM_INSURANCE_FEE = 1 ether;
+
 
     address private contractOwner;          // Account used to deploy contract
     bool private operational = true;
-    uint8 private constant CONSENSUS_REQUIRED_FOR_NEW_AIRLINE = 4;
-
-    struct Flight {
-        bool isRegistered;
-        uint8 statusCode;
-        uint256 updatedTimestamp;        
-        address airline;
-    }
-
-    mapping(bytes32 => Flight) private flights;
-
+    uint8 private constant MINIMUM_AIRLINES_FOR_CONSENSUS = 4;
  
     /********************************************************************************************/
     /*                                       FUNCTION MODIFIERS                                 */
@@ -53,7 +39,7 @@ contract FlightSuretyApp {
     */
     modifier requireIsOperational() 
     {
-         // Modify to call data contract's status
+        // Modify to call data contract's status
         require(operational, "Contract is currently not operational");
         _;  // All modifiers require an "_" which indicates where the function body will be added
     }
@@ -67,26 +53,50 @@ contract FlightSuretyApp {
         _;
     }
 
+    modifier requireCorrectFundingFee()
+    {
+        require(msg.value >= AIRLINE_REGISTRATION_FEE, "The fee submitted is too low. The required fee is of 10 ether");
+        _;
+    }
+
+    modifier requireAirlineEnqueued()
+    {
+        require(flightSuretyData.isAirlineEnqueued(msg.sender), "You first need to enqueue your airline.");
+        _;
+    }
+
+    modifier requireCorrectInsuringFee()
+    {
+        require(msg.value <= MAXIMUM_INSURANCE_FEE && msg.value > 0, "amount too low or too high. Maximum is 1 eth, minimum 0 eth.");
+        _;
+    }
+
     /********************************************************************************************/
     /*                                       CONSTRUCTOR                                        */
     /********************************************************************************************/
 
     event AirlineRegistered(address airline);
+    event AirlineFunded(address airline);
+    event VotedInAirline(address votingAirline, address votedInAirline);
+    event CreditsWithdrawn(address customer, uint256 amount);
 
     /**
     * @dev Contract constructor
     *
     */
-    constructor(address dataAddress) public
+    // we can assume the app is created only once,
+    // so the registration of the first airline
+    // can happen here
+    constructor(address dataContract, address firstAirline) public
     {
         contractOwner = msg.sender;
 
         operational = true; // ?
 
-        flightSuretyData = FlightSuretyData(dataAddress);
-        flightSuretyData.registerAirline(contractOwner, true);
+        flightSuretyData = FlightSuretyData(dataContract);
+        flightSuretyData.registerAirline(firstAirline);
 
-        emit AirlineRegistered(contractOwner);
+        emit AirlineRegistered(firstAirline);
     }
 
     /********************************************************************************************/
@@ -107,22 +117,62 @@ contract FlightSuretyApp {
     * @dev Add an airline to the registration queue
     *
     */   
-    function registerAirline() external view
-    requireIsOperational
-    returns(bool success, uint256 votes)
+    function registerAirline(address newAirline) external requireIsOperational() returns(bool success, uint256 votes)
     {
+        uint256 registeredAirlinesLength = flightSuretyData.registeredAirlinesSize();
+
+        if(registeredAirlinesLength >= MINIMUM_AIRLINES_FOR_CONSENSUS) {
+            // need consensus
+            flightSuretyData.enqueueAirline(newAirline);
+
+        } else {
+            // too few airlines still
+            flightSuretyData.registerAirline(newAirline);
+        }
+
         return (success, 0);
     }
 
+
+    function voteAirlineIn(address airline) public
+    {
+        address votingAirline = msg.sender;
+        uint256 registeredAirlinesLength = flightSuretyData.registeredAirlinesSize();
+        uint256 requiredConsensus = registeredAirlinesLength.div(2);
+        flightSuretyData.addVotingAirline(airline, votingAirline);
+        (address[] memory approvingAirlines, bool enq) = flightSuretyData.getApplicantData(airline);
+
+        uint256 votes = approvingAirlines.length;
+        if(votes == requiredConsensus) {
+            flightSuretyData.registerAirline(airline);
+            flightSuretyData.changeEnqueueStatus(airline, !enq);
+
+            emit VotedInAirline(votingAirline, airline);
+        }
+
+    }
+
+    function submitFunding(address airline) public payable
+    requireCorrectFundingFee
+    requireAirlineEnqueued
+    {
+        flightSuretyData.fundAirline(airline, msg.value);
+
+        emit AirlineFunded(airline);
+    }
 
    /**
     * @dev Register a future flight for insuring.
     *
     */  
-    function registerFlight() external pure
+    function registerFlight(string calldata flight, uint256 timestamp) external
     {
+        flightSuretyData.registerFlight(msg.sender, flight, timestamp);
+
+        // emit FlightRegistered(msg.sender, flight, timestamp);
 
     }
+
     
    /**
     * @dev Called after oracle has updated flight status
@@ -133,8 +183,28 @@ contract FlightSuretyApp {
                                 uint256 timestamp,
                                 uint8 statusCode) internal pure
     {
+
     }
 
+    function withdrawCredit() public
+    requireIsOperational
+    {
+        require(flightSuretyData.getCustomerCredit(msg.sender) > 0, "Customer has nothing credited.");
+
+        uint256 amount = flightSuretyData.pay(msg.sender);
+        msg.sender.transfer(amount);
+
+        emit CreditsWithdrawn(msg.sender, amount);
+    }
+
+
+    // MSJ: For passengers to purchase insurance
+    function purchaseFlightInsurance(string calldata flight, address airline, uint256 timestamp) payable external
+    requireCorrectInsuringFee
+    returns (bool)
+    {
+        flightSuretyData.purchaseInsurance(msg.sender, flight, airline, timestamp, msg.value);
+    }
 
     // Generate a request for oracles to fetch flight information
     function fetchFlightStatus(address airline, string calldata flight, uint256 timestamp) external
@@ -300,5 +370,16 @@ contract FlightSuretyApp {
 
 // decoupling through interface
 interface FlightSuretyData {
-    function registerAirline(address airline, bool operational) external;
+    function registerAirline(address airline) external;
+    function enqueueAirline(address airline) external;
+    function fundAirline(address airline, uint256 amount) external;
+    function registeredAirlinesSize() external view returns(uint256);
+    function isAirlineEnqueued(address airline) external view returns (bool);
+    function getApplicantData(address airline) external view returns(address[] memory, bool);
+    function addVotingAirline(address incomingAirline, address votingAirline) external;
+    function changeEnqueueStatus(address incomingAirline, bool status) external;
+    function purchaseInsurance(address customer, string calldata flight, address airline, uint256 timestamp, uint256 amount) external payable returns (bool);
+    function registerFlight(address airline, string calldata flight, uint256 timestamp) external;
+    function getCustomerCredit(address customer) external view returns(uint256);
+    function pay(address customer) external returns(uint256);
 }
