@@ -8,6 +8,7 @@ let config = Config['localhost'];
 let web3 = new Web3(new Web3.providers.WebsocketProvider(config.url.replace('http', 'ws')));
 web3.eth.defaultAccount = web3.eth.accounts[0];
 let flightSuretyApp = new web3.eth.Contract(FlightSuretyApp.abi, config.appAddress);
+let flightSuretyData = new web3.eth.Contract(FlightSuretyApp.abi, config.dataAddress);
 var oracles = [];
 
 
@@ -34,14 +35,12 @@ flightSuretyApp.events.FlightStatusInfo({
 );
 
 web3.eth.getAccounts().then((accounts) => {
-  console.info("FlightSuretyData address: ", config.dataAddress);
-
   flightSuretyData
   .methods
   .authorizeCaller(config.appAddress)
-    .send({from: web3.eth.defaultAccount})
-    .then(result => { console.log("FlightSuretyApp authorized: ", config.appAddress); })
-    .catch(error => { console.error(error); });
+  .send({from: accounts[0]})
+  .then(result => { console.log("FlightSuretyApp authorized: ", config.appAddress); })
+  .catch(error => { console.error(error); });
 
   flightSuretyApp
   .methods
@@ -51,7 +50,7 @@ web3.eth.getAccounts().then((accounts) => {
       flightSuretyApp
       .methods
       .registerOracle()
-      .send({ from: account, value: fee, gas: 9000000 })
+      .send({ from: account, value: fee, gas: 90000 })
       .then(result => {
         flightSuretyApp.methods.getMyIndexes().call({from: account})
         .then(indices =>{

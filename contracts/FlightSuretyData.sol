@@ -179,13 +179,6 @@ contract FlightSuretyData {
         emit AirlineFunded(airline);
     }
 
-    /** TOIMPLEMENT
-     */
-    function authorizeCaller(address someone) external pure
-    {
-
-    }
-
     function isAirlineEnqueued(address airline) external view
     requireIsOperational
     returns (bool)
@@ -271,18 +264,20 @@ contract FlightSuretyData {
     /**
      *  @dev Credits payouts to insurees
     */
-    function creditInsurees(address airline, string calldata flight, uint256 timestamp) external
+    function creditInsurees(address airline, string calldata flight, uint256 timestamp, uint8 statusCode) external
     requireIsOperational
     requireAirlineIsFunded
     requireAirlineIsRegistered
     {
 
         bytes32 flightKey = getFlightKey(airline, flight, timestamp);
+        flights[flightKey].statusCode = statusCode;
         Flight memory flightStruct = flights[flightKey];
 
         require(flightStruct.isRegistered, "Flight is unregistered");
         require(flightStruct.statusCode != STATUS_CODE_UNKNOWN, "Flight status is unkonwn");
         require(flightStruct.statusCode != STATUS_CODE_ON_TIME, "Flight was on time");
+
         address[] memory customers = insuredCustomers[flightKey];
 
         for (uint256 i = 0; i < customers.length; i++)

@@ -25,6 +25,10 @@ contract FlightSuretyApp {
     address private contractOwner;          // Account used to deploy contract
     bool private operational = true;
     uint8 private constant MINIMUM_AIRLINES_FOR_CONSENSUS = 4;
+
+    // This goes here because it does not regard either the customers or the airlines,
+    // instead it mostly serves the app logic
+    mapping(address => bool) private authorizedCallers;
  
     /********************************************************************************************/
     /*                                       FUNCTION MODIFIERS                                 */
@@ -51,6 +55,12 @@ contract FlightSuretyApp {
     modifier requireContractOwner()
     {
         require(msg.sender == contractOwner, "Caller is not contract owner");
+        _;
+    }
+
+    modifier requireCallerAuthorized()
+    {
+        require(authorizedCallers[msg.sender] == true, "Caller needs to be authorized by the contract owner");
         _;
     }
 
@@ -115,6 +125,20 @@ contract FlightSuretyApp {
         return operational;  // Modify to call data contract's status
     }
 
+
+    function authorizeCaller(address caller) external
+    requireContractOwner
+    {
+        authorizedCallers[caller] = true;
+    }
+
+    // MSJ: Function to authorize contract(s) that can access this contract
+    function unauthorizeCaller(address caller) external
+    requireContractOwner
+    {
+        authorizedCallers[caller] = false;
+    }
+
     /********************************************************************************************/
     /*                                     SMART CONTRACT FUNCTIONS                             */
     /********************************************************************************************/
@@ -124,7 +148,10 @@ contract FlightSuretyApp {
     * @dev Add an airline to the registration queue
     *
     */   
-    function registerAirline(address newAirline) external requireIsOperational() returns(bool success, uint256 votes)
+    function registerAirline(address newAirline) external
+    requireIsOperational
+    requireCallerAuthorized
+    returns(bool success, uint256 votes)
     {
         uint256 registeredAirlinesLength = flightSuretyData.registeredAirlinesSize();
 
@@ -141,7 +168,9 @@ contract FlightSuretyApp {
     }
 
 
-    function voteAirlineIn(address airline) public
+    function voteAirlineIn(address airline)
+    requireCallerAuthorized
+    public
     {
         address votingAirline = msg.sender;
         uint256 registeredAirlinesLength = flightSuretyData.registeredAirlinesSize();
@@ -160,6 +189,7 @@ contract FlightSuretyApp {
     }
 
     function submitFunding(address airline) public payable
+    requireCallerAuthorized
     requireCorrectFundingFee
     requireAirlineEnqueued
     {
@@ -169,6 +199,7 @@ contract FlightSuretyApp {
     }
 
     function addFunding(address airline) public payable
+    requireCallerAuthorized
     requireAmountNonZero
     {
         require(flightSuretyData.isAirlineOperational(airline), "You need to first submit initial funding via submitFunding()");
@@ -181,7 +212,9 @@ contract FlightSuretyApp {
     * @dev Register a future flight for insuring.
     *
     */  
-    function registerFlight(string calldata flight, uint256 timestamp) external
+    function registerFlight(string calldata flight, uint256 timestamp)
+    requireCallerAuthorized
+    external
     {
         flightSuretyData.registerFlight(msg.sender, flight, timestamp);
     }
@@ -190,13 +223,13 @@ contract FlightSuretyApp {
    /**
     * @dev Called after oracle has updated flight status
     *
-    */  
+    */
     function processFlightStatus(address airline,
                                 string memory flight,
                                 uint256 timestamp,
-                                uint8 statusCode) internal pure
+                                uint8 statusCode) internal
     {
-
+        flightSuretyData.creditInsurees(airline, flight, timestamp, statusCode);
     }
 
     function withdrawCredit() public
@@ -214,6 +247,7 @@ contract FlightSuretyApp {
     // MSJ: For passengers to purchase insurance
     function purchaseFlightInsurance(string calldata flight, address airline, uint256 timestamp) payable external
     requireCorrectInsuringFee
+    requireIsOperational
     returns (bool)
     {
         flightSuretyData.purchaseInsurance(msg.sender, flight, airline, timestamp, msg.value);
@@ -393,4 +427,5 @@ interface FlightSuretyData {
     function getCustomerCredit(address customer) external view returns(uint256);
     function pay(address customer) external returns(uint256);
     function isAirlineOperational(address airline) external view returns(bool);
+    function creditInsurees(address airline, string calldata flight, uint256 timestamp, uint8 statusCode) external;
 }
